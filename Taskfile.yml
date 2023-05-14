@@ -1,0 +1,23 @@
+version: '3'
+
+vars:
+  registry: "docker.io"
+  major:
+    sh: awk -F, '{print $2}' .tags
+  full:
+    sh: awk -F, '{print $1}' .tags
+
+tasks:
+  lint-docker:
+    cmds:
+    - hadolint Dockerfile
+  lint:
+    cmds:
+    - task: lint-docker
+  vraquier:
+    deps: [lint-docker]
+    cmds:
+    - kubectl build -t "{{ .registry }}/sebt3/vraquier:{{ .full }}" -f Dockerfile . --registry-secret docker-io --push
+  default:
+    cmds:
+    - task: vraquier

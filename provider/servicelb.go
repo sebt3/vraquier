@@ -38,73 +38,61 @@ func (c *cloud) getDaemonSet(ctx context.Context, svc *core.Service) (*apps.Daem
 	return c.client.AppsV1().DaemonSets(c.LBNamespace).Get(ctx, generateName(svc), meta.GetOptions{})
 }
 
-func (c *cloud) getStatus(svc *core.Service) (*core.LoadBalancerStatus, error) {
+func (c *cloud) getStatus(ctx context.Context, svc *core.Service) (*core.LoadBalancerStatus, error) {
 	klog.Infof("getStatus for %s", svc.Name)
-	//TODO: get the status of the pods of our daemonset, find the hostIP  and set it as ingress IP
-	/*var readyNodes map[string]bool
-
-	if servicehelper.RequestsOnlyLocalTraffic(svc) {
-		readyNodes = map[string]bool{}
-		eps, err := k.endpointsCache.List(svc.Namespace, labels.SelectorFromSet(labels.Set{
-			discovery.LabelServiceName: svc.Name,
-		}))
-		if err != nil {
-			return nil, err
-		}
-
-		for _, ep := range eps {
-			for _, endpoint := range ep.Endpoints {
-				isPod := endpoint.TargetRef != nil && endpoint.TargetRef.Kind == "Pod"
-				isReady := endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready
-				if isPod && isReady && endpoint.NodeName != nil {
-					readyNodes[*endpoint.NodeName] = true
-				}
-			}
-		}
-	}
-
-	pods, err := k.podCache.List(k.LBNamespace, labels.SelectorFromSet(labels.Set{
+	// Get the status of the pods of our daemonset, find the hostIP  and set it as ingress IP
+	labelSelector := meta.LabelSelector{MatchLabels: map[string]string{
 		svcNameLabel:      svc.Name,
 		svcNamespaceLabel: svc.Namespace,
-	}))
+	}}
+	pods, err := c.client.CoreV1().Pods(c.LBNamespace).List(ctx, meta.ListOptions{LabelSelector: labels.Set(labelSelector.MatchLabels).String()})
 	if err != nil {
 		return nil, err
 	}
-
-	expectedIPs, err := k.podIPs(pods, svc, readyNodes)
-	if err != nil {
-		return nil, err
-	}
-
-	sort.Strings(expectedIPs)
 
 	loadbalancer := &core.LoadBalancerStatus{}
-	for _, ip := range expectedIPs {
+	found := false
+	for _, p := range pods.Items {
+		if p.Status.Phase == core.PodRunning {
+			found = true
+		}
 		loadbalancer.Ingress = append(loadbalancer.Ingress, core.LoadBalancerIngress{
-			IP: ip,
+			IP: p.Status.HostIP,
 		})
 	}
-
-	return loadbalancer, nil*/
-	return nil, nil
+	if !found {
+		return nil, fmt.Errorf("no running pods found for %s", svc.Name)
+	}
+	return loadbalancer, nil
 }
 
 // deployDaemonSet ensures that there is a DaemonSet for the service.
-func (c *cloud) deployDaemonSet(ctx context.Context, svc *core.Service) error {
+func (c *cloud) deployDaemonSet(ctx context.Context, svc *core.Service) (*core.LoadBalancerStatus, error) {
 	klog.Infof("deployDaemonSet for %s", svc.Name)
 	ds, err := c.newDaemonSet(svc)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if _, err := c.getDaemonSet(ctx, svc); err == nil {
-		 // Ugly : Consider that the only error possible is : the daemonset have to be created
 		 _, err := c.client.AppsV1().DaemonSets(c.LBNamespace).Update(ctx, ds, meta.UpdateOptions{})
-		 return err
+		 if err != nil {
+			return nil, err
+		}
+	} else if apierrors.IsNotFound(err) {
+		_, err := c.client.AppsV1().DaemonSets(c.LBNamespace).Create(ctx, ds, meta.CreateOptions{})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, err
 	}
 /*	defer k.recorder.Eventf(svc, core.EventTypeNormal, "AppliedDaemonSet", "Applied LoadBalancer DaemonSet %s/%s", ds.Namespace, ds.Name)*/
-	_, errcreate := c.client.AppsV1().DaemonSets(c.LBNamespace).Create(ctx, ds, meta.CreateOptions{})
-	return errcreate
+	if svc.Spec.LoadBalancerIP != "" {
+		return &svc.Status.LoadBalancer, nil
+	} else {
+		return c.getStatus(ctx, svc)
+	}
 }
 
 // deleteDaemonSet ensures that there are no DaemonSets for the given service.
@@ -125,6 +113,23 @@ func (c *cloud) deleteDaemonSet(ctx context.Context, svc *core.Service) error {
 
 func (c *cloud) nodeHasDaemonSetLabel() (bool, error) {
 	return false, nil
+}
+
+func (c *cloud) ensureServiceLBServiceAccount(ctx context.Context) error {
+	sa := c.client.CoreV1().ServiceAccounts(c.LBNamespace)
+	if _, err := sa.Get(ctx, "svclb", meta.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
+		return err
+	}
+	_, err := sa.Create(ctx, &core.ServiceAccount{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "svclb",
+			Namespace: c.LBNamespace,
+		},
+	}, meta.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		return nil
+	}
+	return err
 }
 
 func (c *cloud) newDaemonSet(svc *core.Service) (*apps.DaemonSet, error) {

@@ -21,7 +21,7 @@ func (c *cloud) GetLoadBalancer(ctx context.Context, clusterName string, service
 		}
 		return nil, false, err
 	}
-	status, err_status := c.getStatus(service)
+	status, err_status := c.getStatus(ctx, service)
 	return status, true, err_status
 }
 
@@ -32,18 +32,16 @@ func (c *cloud) GetLoadBalancerName(ctx context.Context, clusterName string, ser
 
 // EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
 func (c *cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
-	if err := c.deployDaemonSet(ctx, service); err != nil {
+	if err := c.ensureServiceLBServiceAccount(ctx); err != nil {
 		return nil, err
 	}
-	return nil, cloudprovider.ImplementedElsewhere
+	return c.deployDaemonSet(ctx, service);
 }
 
 // UpdateLoadBalancer updates hosts under the specified load balancer.
 func (c *cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
-	if err := c.deployDaemonSet(ctx, service); err != nil {
-		return err
-	}
-	return cloudprovider.ImplementedElsewhere
+	_, err := c.deployDaemonSet(ctx, service)
+	return err
 }
 
 // EnsureLoadBalancerDeleted deletes the specified load balancer if it
