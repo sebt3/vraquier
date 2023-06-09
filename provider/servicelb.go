@@ -40,7 +40,7 @@ func (c *cloud) getDaemonSet(ctx context.Context, svc *core.Service) (*apps.Daem
 
 func (c *cloud) getStatus(ctx context.Context, svc *core.Service) (*core.LoadBalancerStatus, error) {
 	klog.Infof("getStatus for %s", svc.Name)
-	// Get the status of the pods of our daemonset, find the hostIP  and set it as ingress IP
+	// Get the status of the pods of our daemonset, find the hostIP and set it as ingress IP
 	labelSelector := meta.LabelSelector{MatchLabels: map[string]string{
 		svcNameLabel:      svc.Name,
 		svcNamespaceLabel: svc.Namespace,
@@ -56,9 +56,44 @@ func (c *cloud) getStatus(ctx context.Context, svc *core.Service) (*core.LoadBal
 		if p.Status.Phase == core.PodRunning {
 			found = true
 		}
-		loadbalancer.Ingress = append(loadbalancer.Ingress, core.LoadBalancerIngress{
-			IP: p.Status.HostIP,
-		})
+		found_extern := false
+		if node, err := c.client.CoreV1().Nodes().Get(ctx, p.Spec.NodeName, meta.GetOptions{}); err == nil {
+			for _, v := range node.Status.Addresses {
+				if v.Type == core.NodeExternalIP {
+					loadbalancer.Ingress = append(loadbalancer.Ingress, core.LoadBalancerIngress{
+						IP: v.Address,
+					})
+					found_extern = true
+				}
+			}
+			if !found_extern {
+				found_extern = true
+				if address := node.Annotations[ExternalIPKey]; address != "" {
+					for _, v := range strings.Split(address, ",") {
+						loadbalancer.Ingress = append(loadbalancer.Ingress, core.LoadBalancerIngress{IP: v})
+					}
+				} else if address := node.Labels[ExternalIPKey]; address != "" {
+					for _, v := range strings.Split(address, ",") {
+						loadbalancer.Ingress = append(loadbalancer.Ingress, core.LoadBalancerIngress{IP: v})
+					}
+				} else if address := node.Annotations[FlannelIPKey]; address != "" {
+					loadbalancer.Ingress = append(loadbalancer.Ingress, core.LoadBalancerIngress{
+						IP: address,
+					})
+				} else if address := node.Labels[FlannelIPKey]; address != "" {
+					loadbalancer.Ingress = append(loadbalancer.Ingress, core.LoadBalancerIngress{
+						IP: address,
+					})
+				} else {
+					found_extern = false
+				}
+			}
+		}
+		if !found_extern {
+			loadbalancer.Ingress = append(loadbalancer.Ingress, core.LoadBalancerIngress{
+				IP: p.Status.HostIP,
+			})
+		}
 	}
 	if !found {
 		return nil, fmt.Errorf("no running pods found for %s", svc.Name)

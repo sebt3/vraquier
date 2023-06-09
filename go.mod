@@ -5,9 +5,11 @@ go 1.20
 require (
 	k8s.io/api v0.26.1
 	k8s.io/apimachinery v0.26.1
+	k8s.io/client-go v0.26.1
 	k8s.io/cloud-provider v0.26.1
 	k8s.io/component-base v0.26.1
 	k8s.io/klog/v2 v2.90.0
+	k8s.io/utils v0.0.0-20221107191617-1a15be271d1d
 )
 
 replace (
@@ -118,12 +120,10 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiserver v0.26.1 // indirect
-	k8s.io/client-go v0.26.1 // indirect
 	k8s.io/component-helpers v0.26.1 // indirect
 	k8s.io/controller-manager v0.26.1 // indirect
 	k8s.io/kms v0.26.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
-	k8s.io/utils v0.0.0-20221107191617-1a15be271d1d // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.35 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
