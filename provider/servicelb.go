@@ -26,7 +26,7 @@ var (
 )
 const (
 	DefaultLBNS    = meta.NamespaceSystem
-	DefaultLBImage = "rancher/klipper-lb:v0.4.3"
+	DefaultLBImage = "rancher/klipper-lb:v0.4.9"
 )
 
 func generateName(svc *core.Service) string {
