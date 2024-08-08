@@ -25,13 +25,6 @@ jobs:
       with:
         username: ${{ github.repository_owner }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Github Login
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Build the Docker image
       uses: docker/build-push-action@v3
       with:
@@ -43,6 +36,3 @@ jobs:
           ${{ github.repository }}:latest
           ${{ github.repository }}:${{ steps.version.outputs.full }}
           ${{ github.repository }}:${{ steps.version.outputs.major }}
-          ghcr.io/${{ github.repository }}:latest
-          ghcr.io/${{ github.repository }}:${{ steps.version.outputs.full }}
-          ghcr.io/${{ github.repository }}:${{ steps.version.outputs.major }}
