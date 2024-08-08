@@ -294,7 +294,7 @@ func (c *cloud) newDaemonSet(svc *core.Service) (*apps.DaemonSet, error) {
 					Name: "DEST_IPS",
 					ValueFrom: &core.EnvVarSource{
 						FieldRef: &core.ObjectFieldSelector{
-							FieldPath: "status.hostIP",
+							FieldPath: "status.hostIPs",
 						},
 					},
 				},
