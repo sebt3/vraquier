@@ -1,3 +1,7 @@
+# DEPRECATED
+
+Since Cilium now does this for all my use-cases, this project is abandonware
+
 # Vraquier
 
 A poor-man "load-balancer" controller for kubernetes clusters without a cloud-controller. For when even kube-vip or metalLB are to much.
